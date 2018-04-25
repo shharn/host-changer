@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"strings"
-	//"regexp"
 )
 
 var (
@@ -17,7 +17,7 @@ var (
 		"test":  []string{"125.141.158."},
 		"pre":   []string{"183.110.0.", "222.122.222."},
 	}
-	NEXT_LINE = "\r\n"
+	nextLine = "\r\n"
 )
 
 func main() {
@@ -53,16 +53,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	splitted := strings.Split(string(content), NEXT_LINE)
+	splitted := strings.Split(string(content), nextLine)
 	currentHostGroup := ""
 	for idx := 0; idx < len(splitted); idx++ {
 		singleLine := strings.TrimSpace(splitted[idx])
 		if len(singleLine) > 0 && isHostGroupDeclaration(singleLine) {
-			temp := strings.TrimSpace(strings.Split(singleLine, "##")[1])
-			// oh, this is the target host we want to change !!
-			if index, exists := contains(hosts, temp); exists == true {
-				// remove this host from the list so that we won't check again
-				hosts = remove(hosts, index)
+			temp := strings.TrimSpace(strings.Split(singleLine, "###")[1])
+			fmt.Printf("Found Host Group Declaration : %v\n", temp)
+			if _, exists := contains(hosts, temp); exists == true {
+				fmt.Printf("Found target Host Group : %v\n", temp)
 				currentHostGroup = temp
 			} else {
 				currentHostGroup = ""
@@ -71,24 +70,29 @@ func main() {
 			tempHost := strings.Fields(singleLine)
 			if len(tempHost) == 2 && tempHost[1] == currentHostGroup {
 				tempHostIP := strings.TrimSpace(tempHost[0])
+				tempEnvStr := *targetEnvironment
+				targetHostList := hostEnvMap[tempEnvStr]
 				if isHostIPCommented(tempHostIP) {
 					tempHostIP = tempHostIP[1:]
-					if *targetEnvironment != "live" && isTargetEnvHostIP(hostEnvMap[*targetEnvironment], tempHostIP) {
+					if *targetEnvironment != "live" && isTargetEnvHostIP(targetHostList, tempHostIP) {
+						fmt.Printf("Will remove the Hashbang : %v\n", tempHostIP)
 						// remove leading hashbang
 						singleLine = singleLine[1:]
 					}
 				} else { // In case of already set host ip
-					if !isTargetEnvHostIP(hostEnvMap[*targetEnvironment], tempHostIP) || *targetEnvironment == "live" {
-						singleLine += "#" + singleLine
+					if *targetEnvironment == "live" || !isTargetEnvHostIP(targetHostList, tempHostIP) {
+						fmt.Printf("Will comment this line out : %v\n", tempHostIP)
+						singleLine = "#" + singleLine
 					}
 				}
 				splitted[idx] = singleLine
 			}
 		}
 	}
-	result := strings.Join(splitted, NEXT_LINE)
-	fmt.Println(result)
-	ioutil.WriteFile(hostFilePath+".test", []byte(result), 0664)
+	result := strings.Join(splitted, nextLine)
+	ioutil.WriteFile(hostFilePath, []byte(result), 0664)
+
+	exec.Command("C:\\Users\\shharn2.NEXON\\Desktop\\clear_cache_chrome_ie11.bat").Run()
 }
 
 func contains(array []string, target string) (int, bool) {
@@ -106,7 +110,7 @@ func remove(arr []string, index int) []string {
 }
 
 func isHostGroupDeclaration(str string) bool {
-	return strings.HasPrefix(str, "##")
+	return strings.HasPrefix(str, "###")
 }
 
 func isHostIPCommented(ip string) bool {
