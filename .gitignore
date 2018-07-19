@@ -4,3 +4,6 @@ debug
 
 .vscode
 
+src/github.com/
+src/golang.org/
+

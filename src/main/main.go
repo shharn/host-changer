@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 var (
@@ -14,7 +15,7 @@ var (
 	hostEnvMap   = map[string][]string{
 		"local": []string{"127.0.0.1"},
 		"dev":   []string{"211.218.231."},
-		"test":  []string{"125.141.158."},
+		"test":  []string{"125.141."},
 		"pre":   []string{"183.110.0.", "222.122.222."},
 	}
 	nextLine = "\r\n"
@@ -59,9 +60,7 @@ func main() {
 		singleLine := strings.TrimSpace(splitted[idx])
 		if len(singleLine) > 0 && isHostGroupDeclaration(singleLine) {
 			temp := strings.TrimSpace(strings.Split(singleLine, "###")[1])
-			fmt.Printf("Found Host Group Declaration : %v\n", temp)
 			if _, exists := contains(hosts, temp); exists == true {
-				fmt.Printf("Found target Host Group : %v\n", temp)
 				currentHostGroup = temp
 			} else {
 				currentHostGroup = ""
@@ -92,7 +91,21 @@ func main() {
 	result := strings.Join(splitted, nextLine)
 	ioutil.WriteFile(hostFilePath, []byte(result), 0664)
 
-	exec.Command("C:\\Users\\shharn2.NEXON\\Desktop\\clear_cache_chrome_ie11.bat").Run()
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		clearTempFileOfIE()
+	}()
+	go func() {
+		defer wg.Done()
+		clearTempFileOfChrome()
+	}()
+	go func() {
+		defer wg.Done()
+		flushDNSCache()
+	}()
+	wg.Wait()
 }
 
 func contains(array []string, target string) (int, bool) {
@@ -124,4 +137,30 @@ func isTargetEnvHostIP(list []string, ip string) bool {
 		}
 	}
 	return false
+}
+
+func clearTempFileOfIE() {
+	execCommand("Fail to terminate IE", "TASKKILL", "/F", "/IM", "iexplore.exe")
+	execCommand("Fail to delete IE cookies", "RunDll32.exe", "InetCpl.cpl,ClearMyTracksByProcess 2")
+	execCommand("Fail to delete IE temporary internet files", "RunDll32.exe", "InetCpl.cpl,ClearMyTracksByProcess 8")
+}
+
+func clearTempFileOfChrome() {
+	chromeDataDir := os.Getenv("LOCALAPPDATA") + "\\Google\\Chrome\\User Data\\Default"
+	chromeCacheDir := chromeDataDir + "\\Cache"
+
+	execCommand("Fail To terminate chrome", "TASKKILL", "/F", "/IM", "chrome.exe")
+	execCommand("Fail to delete Chrome cache", "cmd", "/c", "DEL", "/Q", "/S", "/F", chromeCacheDir+"\\*.*")
+	execCommand("Fail to delete Chrome cookies", "cmd", "/c", "DEL", "/Q", "/F", chromeDataDir+"\\*Cookies*.*")
+}
+
+func flushDNSCache() {
+	execCommand("Fail to flush dns cash", "ipconfig", "/flushdns")
+}
+
+func execCommand(errorMessage, name string, args ...string) {
+	cmd := exec.Command(name, args...)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("%s - %s", errorMessage, err.Error())
+	}
 }
