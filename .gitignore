@@ -1,10 +1,13 @@
 **/bin
 **/*.exe
 **/*.config
+hc.config.yml
+pkg/
 debug
 
 .vscode
 
-src/github.com/
+src/gopkg.in/
 src/golang.org/
+src/github.com/
 
