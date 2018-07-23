@@ -22,42 +22,74 @@ type HostsFileModifyingTask struct {
 	isGroupName bool
 	args        []string
 	parser      EnvParser
-	finder      EnvFinder
 }
 
 // Execute is the implementation of the interface
 func (h HostsFileModifyingTask) Execute() {
-	if err := h.parser.Parse(); err != nil {
+	var b bytes.Buffer
+	hostFilePath := fmt.Sprintf("%s\\%s", os.Getenv("SystemRoot"), `\System32\drivers\etc\hosts.`)
+	if strings.ToLower(h.env) == "live" {
+		ioutil.WriteFile(hostFilePath, b.Bytes(), 0644)
+		return
+	}
+
+	parsed, err := h.parser.Parse()
+	if err != nil {
 		panic(err)
 	}
 
-	config := h.parser.GetParsedData().(envConfig)
 	var list []string
 	if h.isGroupName {
-		for _, g := range h.args {
-			temp := config.Group[g]
-			list = append(list, temp...)
-		}
+		list = h.resolveGroupNames(h.args, parsed.(envConfig).Group)
 	} else {
 		list = h.args
 	}
 
-	var b bytes.Buffer
 	for _, host := range list {
-		ip := h.getTargetIPAddress(host)
+		ip := h.getTargetIPAddress(host, parsed.(envConfig))
 		if len(ip) > 0 {
 			str := fmt.Sprintf("%s %s\n", ip, host)
 			b.WriteString(str)
 		}
 	}
-	// match the rule
-	hostFilePath := os.Getenv("SystemRoot") + `\System32\drivers\etc\hosts`
 	ioutil.WriteFile(hostFilePath, b.Bytes(), 0644)
 }
 
-func (h HostsFileModifyingTask) getTargetIPAddress(host string) string {
-	rules := h.parser.GetParsedData().(envConfig).EnvRule[h.env]
-	addrCollection := h.parser.GetParsedData().(envConfig).Address
+func (h HostsFileModifyingTask) resolveGroupNames(name []string, groupCol map[string][]string) []string {
+	var list []string
+	for _, g := range name {
+		list = append(list, groupCol[g]...)
+	}
+
+	list = h.resolveEmbeddedGroupName(list, groupCol)
+	return list
+}
+
+func (h HostsFileModifyingTask) resolveEmbeddedGroupName(list []string, groupCol map[string][]string) []string {
+	var result, tmp []string
+	for _, n := range list {
+		if h.isEmbeddedGroupName(n) {
+			tn := n[2 : len(n)-1]
+			tmp = groupCol[tn]
+			tmp = h.resolveEmbeddedGroupName(tmp, groupCol)
+			result = append(result, tmp...)
+		} else {
+			result = append(result, n)
+		}
+	}
+	return result
+}
+
+func (h HostsFileModifyingTask) isEmbeddedGroupName(name string) bool {
+	return strings.HasPrefix(name, "${") && strings.HasSuffix(name, "}")
+}
+
+func (h HostsFileModifyingTask) getTargetIPAddress(host string, srcData envConfig) string {
+	if strings.ToLower(h.env) == "local" {
+		return "127.0.0.1"
+	}
+	rules := srcData.EnvRule[h.env]
+	addrCollection := srcData.Address
 	addrList, exists := addrCollection[host]
 	if !exists {
 		return ""
@@ -79,7 +111,6 @@ func NewHostsFileModifyingTask(env, groupOrHost string, args ...string) HostsFil
 		env:         env,
 		isGroupName: strings.ToLower(groupOrHost) == "group",
 		parser:      parser,
-		finder:      NewYamlEnvFinder(parser),
 		args:        args,
 	}
 }

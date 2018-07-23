@@ -1,7 +1,6 @@
 **/bin
 **/*.exe
 **/*.config
-hc.config.yml
 pkg/
 debug
 

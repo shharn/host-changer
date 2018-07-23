@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"strings"
 
 	yaml "gopkg.in/yaml.v2"
 )
@@ -11,65 +10,7 @@ import (
 // EnvParser represents the actions for parsing a file
 // It will read hosts information from the config file(hc.config.yml and address.yml)
 type EnvParser interface {
-	GetParsedData() interface{}
-	Parse() error
-}
-
-// EnvFinder abstracts what EnvParser should do to find configuration
-type EnvFinder interface {
-	FindEnv(string) []string
-	FindHost(string, string) string
-	FindGroup(string) []string
-}
-
-// YamlEnvFinder do the work on data read from the yaml file
-type YamlEnvFinder struct {
-	parser EnvParser
-}
-
-// FindEnv finds target env ip configs
-func (y YamlEnvFinder) FindEnv(env string) []string {
-	hosts := y.parser.GetParsedData().(envConfig).EnvRule[env]
-	return hosts
-}
-
-// FindHost finds host
-func (y YamlEnvFinder) FindHost(env, host string) string {
-	conf := y.parser.GetParsedData().(envConfig)
-	matchingRule, exists := conf.EnvRule[env]
-	if !exists {
-		return ""
-	}
-
-	ips, exists := conf.Address[host]
-	if !exists {
-		return ""
-	}
-
-	for _, ip := range ips {
-		for _, rule := range matchingRule {
-			if strings.HasPrefix(ip, rule) {
-				return ip
-			}
-		}
-	}
-	return ""
-}
-
-// FindGroup finds group information
-func (y YamlEnvFinder) FindGroup(group string) []string {
-	result, exists := y.parser.GetParsedData().(envConfig).Group[group]
-	if !exists {
-		return []string{}
-	}
-	return result
-}
-
-// NewYamlEnvFinder creates a new YamlEnvFinder instance
-func NewYamlEnvFinder(parser EnvParser) YamlEnvFinder {
-	return YamlEnvFinder{
-		parser: parser,
-	}
+	Parse() (interface{}, error)
 }
 
 // YamlEnvParser parses the yml file of env config file
@@ -77,29 +18,25 @@ func NewYamlEnvFinder(parser EnvParser) YamlEnvFinder {
 type YamlEnvParser struct {
 	base     string
 	filename string
-	ec       envConfig
-}
-
-// GetParsedData returns the parsed data
-func (y YamlEnvParser) GetParsedData() interface{} {
-	return y.ec
 }
 
 // Parse the yaml file & and store results using the library
-func (y YamlEnvParser) Parse() error {
+func (y YamlEnvParser) Parse() (interface{}, error) {
 	var data []byte
 	var err error
-	data, err = ioutil.ReadFile(y.base + y.filename)
+	data, err = ioutil.ReadFile(y.base + "\\" + y.filename)
 	if err != nil {
 		fmt.Println(err.Error())
-		return err
+		return nil, err
 	}
-	err = yaml.Unmarshal(data, &y.ec)
+
+	var out envConfig
+	err = yaml.Unmarshal(data, &out)
 	if err != nil {
 		fmt.Println(err.Error())
-		return err
+		return nil, err
 	}
-	return nil
+	return out, nil
 }
 
 // NewYamlEnvParser creates a new YamlParser instance
