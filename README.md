@@ -5,7 +5,7 @@
 - Run Cmd as Administrator (Don't forget it)
 
 ## Usage
-host-changer switch --env [local | dev | test(default) | pre | live ] --target [host(default) | group] --list test1,test2
+hc switch --env [local | dev | test(default) | pre | live ] --target [host(default) | group] --list test1,test2
 
 ## Example
 ### hc.config.yml (same as the file on repository)
